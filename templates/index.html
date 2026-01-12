@@ -25,12 +25,12 @@
                             <span class="toggle-text">AI Enhanced</span>
                         </label>
                     </div>
-                    <button class="btn btn-icon" id="settings-btn" aria-label="Settings">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="3"/>
-                            <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-                        </svg>
-                    </button>
+                                        <button class="btn btn-icon" id="settings-btn" aria-label="Settings">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="12" cy="12" r="3"/>
+                                                <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                                            </svg>
+                                        </button>
                 </div>
             </div>
         </header>
@@ -130,6 +130,18 @@
                     </button>
                 </div>
                 <div class="sign-container" id="sign-container">
+                    <div class="live-panel" id="live-panel">
+                        <div class="live-controls">
+                            <button class="btn btn-secondary" id="live-toggle" aria-pressed="false">Toggle Camera</button>
+                            <span class="live-status" id="live-status">Camera off</span>
+                        </div>
+                        <div class="live-view">
+                            <video id="camera-video" playsinline class="hidden"></video>
+                            <canvas id="camera-canvas" width="640" height="480" class="hidden"></canvas>
+                            <div id="avatar" class="avatar idle" aria-hidden="true"></div>
+                            <div id="live-sign-label" class="live-sign-label" aria-live="polite"></div>
+                        </div>
+                    </div>
                     <div class="empty-state" id="empty-state">
                         <div class="empty-illustration">
                             <svg class="empty-icon" viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -266,6 +278,12 @@
                             <span>Show Sign Descriptions</span>
                         </label>
                     </div>
+                    <div class="setting-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="force-fingerspell" >
+                            <span>Force fingerspell (spell every sign letter-by-letter)</span>
+                        </label>
+                    </div> 
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" id="reset-settings">Reset to Defaults</button>
@@ -288,6 +306,9 @@
         </aside>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="/static/app.js"></script>
 </body>
 </html>
