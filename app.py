@@ -985,6 +985,11 @@ def match_signs():
                 add_video_urls_to_signs(signs)
             except Exception:
                 logger.debug("Failed to enrich signs with videos")
+            # For any signs without videos, ask Gemini for a short description/suggestion
+            try:
+                gemini_describe_missing(signs)
+            except Exception:
+                logger.debug("Failed to run gemini_describe_missing")
             return jsonify(signs=signs, method="gemini", text=text)
 
     # Local fallback
@@ -993,6 +998,12 @@ def match_signs():
         add_video_urls_to_signs(signs)
     except Exception:
         logger.debug("Failed to enrich signs with videos")
+    # If configured, call Gemini to describe missing sign videos (best-effort)
+    try:
+        gemini_describe_missing(signs)
+    except Exception:
+        logger.debug("Failed to run gemini_describe_missing (local path)")
+
     return jsonify(signs=signs, method="local", text=text)
 
 
@@ -1031,6 +1042,67 @@ def add_video_urls_to_signs(signs: List[Dict]):
 
             if any(letter_video_urls):
                 sign["letter_videos"] = letter_video_urls
+
+
+def gemini_describe_missing(signs: List[Dict]):
+    """For any sign entries that lack a `video_url`, call Gemini to provide
+    a short recommendation or description the frontend can display.
+
+    The function updates each sign dict in-place adding optional keys:
+      - `suggestion`: one of 'fingerspell', 'gesture', or 'description'
+      - `description`: short textual instruction or description
+    """
+    if not GEMINI_API_KEY:
+        return
+
+    # Collect unique words missing videos
+    missing = [s["word"] for s in signs if not s.get("video_url")]
+    if not missing:
+        return
+
+    try:
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        prompt = (
+            "You are a helpful assistant that provides concise sign-language guidance "
+            "for words when an example video is not available.\n\n"
+            "Given the following words, return a JSON array with an object for each word:\n"
+            "[{\"word\": \"...\", \"suggestion\": \"fingerspell|gesture|description\", \"description\": \"short description (max 140 chars)\"}]\n\n"
+            f"Words: {json.dumps(missing)}\n\n"
+            "Guidelines:\n"
+            "- If the word is best represented by fingerspelling, set suggestion to 'fingerspell'.\n"
+            "- If a simple gesture conveys the meaning, set suggestion to 'gesture' and give a one-line description.\n"
+            "- Otherwise set suggestion to 'description' and provide a short plain-English instruction for the frontend to display.\n"
+            "Only return the JSON array and no extra text."
+        )
+
+        resp = model.generate_content(prompt)
+        text = resp.text.strip()
+
+        # Remove markdown code block wrappers if present
+        if text.startswith('```'):
+            lines = text.split('\n')
+            text = '\n'.join(lines[1:-1])
+
+        items = json.loads(text)
+        # Map by lowercased word for easy lookup
+        mapping = {it.get('word', '').lower(): it for it in items if isinstance(it, dict)}
+
+        for sign in signs:
+            if sign.get('video_url'):
+                continue
+            key = str(sign.get('word', '')).lower()
+            info = mapping.get(key)
+            if not info:
+                continue
+            suggestion = info.get('suggestion')
+            description = info.get('description')
+            if suggestion:
+                sign['suggestion'] = suggestion
+            if description:
+                sign['description'] = description
+
+    except Exception as e:
+        logger.debug("gemini_describe_missing failed: %s", e)
 
 
 @app.route('/videos/<path:filename>')
