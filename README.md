@@ -4,7 +4,7 @@ Speech-to-Sign Aid is a real-time accessibility prototype that converts live spe
 
 This MVP shows that real-time speech-to-visual communication can work in classrooms, meetings, and presentations.
 
----
+
 
 ## What It Does
 
