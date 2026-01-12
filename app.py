@@ -1,14 +1,3 @@
-"""
-Speech-to-Sign Aid MVP
-Flask backend with Google Gemini API for intelligent sign matching
-
-Improvements:
-- Added structured logging and environment-driven log level
-- Type hints and small utility helpers
-- LRU caching for Gemini queries and safer JSON parsing
-- Input validation and consistent JSON error responses
-"""
-
 import os
 import json
 import re
@@ -17,7 +6,7 @@ from functools import lru_cache
 from typing import Dict, List, Tuple, Optional, TypedDict
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory, url_for
 import google.generativeai as genai
 
 # Logging configuration
@@ -26,6 +15,11 @@ logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s %(levelname)s: %(messag
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# Directory containing letter/phrase videos (relative to this file)
+VIDEOS_DIR = os.path.join(os.path.dirname(__file__), "videos")
+
+# (No authentication required by default)
 
 # Basic security limits
 # Reject very large requests early (text inputs are expected to be small)
@@ -934,6 +928,8 @@ Only return the JSON array, no other text."""
         return None, f"Gemini API error: {str(e)}"
 
 @app.route('/')
+@app.route('/index')
+@app.route('/index.html')
 def index():
     return render_template('index.html')
 
@@ -951,6 +947,32 @@ def match_signs():
     # Trim overly long input for safety
     text = text.strip()[:2000]
     use_ai = bool(data.get('use_ai', True))
+    force_fingerspell = bool(data.get('force_fingerspell', False))
+
+    # If the client requests forced fingerspelling, construct fingerspelled signs for each word
+    if force_fingerspell:
+        words = [w for w in re.sub(r"[^A-Za-z0-9\s]", " ", text).split() if w]
+        signs = []
+        for w in words:
+            letters = [c for c in w if c.isalpha()]
+            if not letters:
+                continue
+            signs.append({
+                "word": w,
+                "category": "fingerspelled",
+                "synonyms": [],
+                "description": f"Finger-spell the word '{w}'",
+                "letters": letters,
+                "confidence": 1.0,
+                "matched_from": w,
+            })
+
+        try:
+            add_video_urls_to_signs(signs)
+        except Exception:
+            logger.debug("Failed to enrich forced-fingerspell signs with videos")
+
+        return jsonify(signs=signs, method="fingerspell", text=text)
 
     # Try Gemini if requested and configured
     if use_ai and GEMINI_API_KEY:
@@ -958,11 +980,64 @@ def match_signs():
         if signs is None:
             logger.info("Gemini error, falling back to local: %s", error)
         else:
+            # Enrich signs with available video URLs
+            try:
+                add_video_urls_to_signs(signs)
+            except Exception:
+                logger.debug("Failed to enrich signs with videos")
             return jsonify(signs=signs, method="gemini", text=text)
 
     # Local fallback
     signs = local_match_signs(text)
+    try:
+        add_video_urls_to_signs(signs)
+    except Exception:
+        logger.debug("Failed to enrich signs with videos")
     return jsonify(signs=signs, method="local", text=text)
+
+
+def add_video_urls_to_signs(signs: List[Dict]):
+    """Augment sign entries with `video_url` for gesture videos and
+    `letter_videos` for fingerspelled entries when matching files exist
+    in the local `videos/` folder.
+    """
+    if not os.path.isdir(VIDEOS_DIR):
+        return
+
+    # Map lowercase filename -> actual filename for lookup
+    files = {fn.lower(): fn for fn in os.listdir(VIDEOS_DIR)}
+
+    for sign in signs:
+        word = str(sign.get("word", "")).strip()
+        key = f"{word.lower()}.mp4"
+
+        # Attach gesture/phrase video if available
+        if key in files:
+            sign["video_url"] = url_for("serve_video", filename=files[key])
+
+        # For fingerspelled entries, attach per-letter videos when available
+        if sign.get("category") == "fingerspelled":
+            letters = sign.get("letters") or []
+            letter_video_urls = []
+            for ch in letters:
+                if not ch or not str(ch).isalpha():
+                    letter_video_urls.append(None)
+                    continue
+                candidate = f"{str(ch).lower()}.mp4"
+                if candidate in files:
+                    letter_video_urls.append(url_for("serve_video", filename=files[candidate]))
+                else:
+                    letter_video_urls.append(None)
+
+            if any(letter_video_urls):
+                sign["letter_videos"] = letter_video_urls
+
+
+@app.route('/videos/<path:filename>')
+def serve_video(filename: str):
+    """Serve video files from the workspace `videos` folder."""
+    # send_from_directory handles safe path joining
+    return send_from_directory(VIDEOS_DIR, filename)
 
 # Apply rate limit to the match endpoint if limiter is configured
 if 'limiter' in globals() and limiter:
