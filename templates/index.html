@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speech to Sign Aid</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 1 1 3 0m-3 6a1.5 1.5 0 1 0-3 0v2a7.5 7.5 0 0 0 15 0v-5a1.5 1.5 0 1 0-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 1 1 3 0v1m0 0V11m0-5.5a1.5 1.5 0 1 1 3 0v4.5"/>
+                    </svg>
+                    <h1>Speech to Sign Aid</h1>
+                </div>
+                <div class="header-controls">
+                    <div class="ai-toggle">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="ai-toggle" checked>
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-text">AI Enhanced</span>
+                        </label>
+                    </div>
+                    <button class="btn btn-icon" id="settings-btn" aria-label="Settings">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Stats Bar -->
+            <div class="stats-bar">
+                <div class="stat">
+                    <span class="stat-label">Status</span>
+                    <span class="stat-value" id="status-indicator">
+                        <span class="status-dot"></span>
+                        <span id="status-text">Ready</span>
+                    </span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Method</span>
+                    <span class="stat-value" id="method-indicator">--</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Latency</span>
+                    <span class="stat-value" id="latency-indicator">--</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Signs Matched</span>
+                    <span class="stat-value" id="match-count">0</span>
+                </div>
+            </div>
+
+            <!-- Input Section -->
+            <section class="input-section">
+                <div class="input-mode-tabs">
+                    <button class="tab-btn active" data-mode="speech">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                            <line x1="12" y1="19" x2="12" y2="23"/>
+                            <line x1="8" y1="23" x2="16" y2="23"/>
+                        </svg>
+                        Voice Input
+                    </button>
+                    <button class="tab-btn" data-mode="text">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="4 7 4 4 20 4 20 7"/>
+                            <line x1="9" y1="20" x2="15" y2="20"/>
+                            <line x1="12" y1="4" x2="12" y2="20"/>
+                        </svg>
+                        Text Input
+                    </button>
+                </div>
+
+                <!-- Speech Input -->
+                <div class="input-panel" id="speech-panel">
+                    <button class="mic-button" id="mic-btn" aria-label="Start listening">
+                        <svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                            <line x1="12" y1="19" x2="12" y2="23"/>
+                            <line x1="8" y1="23" x2="16" y2="23"/>
+                        </svg>
+                        <div class="pulse-ring"></div>
+                    </button>
+                    <p class="mic-hint" id="mic-hint">Click to start listening</p>
+                    <div class="transcript-box" id="transcript-box">
+                        <p class="transcript-text" id="transcript"></p>
+                    </div>
+                </div>
+
+                <!-- Text Input -->
+                <div class="input-panel hidden" id="text-panel">
+                    <div class="text-input-container">
+                        <textarea 
+                            id="text-input" 
+                            placeholder="Type or paste captions here..."
+                            rows="3"
+                            aria-label="Caption text input"
+                        ></textarea>
+                        <button class="btn btn-primary" id="process-btn">
+                            Process Text
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Sign Display Section -->
+            <section class="sign-display-section">
+                <div class="section-header">
+                    <h2 class="section-title">Sign Output</h2>
+                    <button class="btn btn-secondary btn-sm" id="try-example-btn" title="Try example phrases">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="12" y1="18" x2="12" y2="12"/>
+                            <line x1="9" y1="15" x2="15" y2="15"/>
+                        </svg>
+                        Try Examples
+                    </button>
+                </div>
+                <div class="sign-container" id="sign-container">
+                    <div class="empty-state" id="empty-state">
+                        <div class="empty-illustration">
+                            <svg class="empty-icon" viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <circle cx="60" cy="60" r="50" opacity="0.2"/>
+                                <path d="M40 50 L60 30 L80 50" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M50 70 L60 60 L70 70" stroke-linecap="round" stroke-linejoin="round"/>
+                                <circle cx="60" cy="60" r="8" fill="currentColor" opacity="0.3"/>
+                            </svg>
+                        </div>
+                        <h3 class="empty-title">Ready to translate</h3>
+                        <p class="empty-description">Speak into the microphone or type text to see sign language translations</p>
+                        <div class="example-phrases" id="quick-examples">
+                            <span class="example-label">Try:</span>
+                            <button class="example-chip" data-text="Hello, how are you?">Hello, how are you?</button>
+                            <button class="example-chip" data-text="Thank you very much">Thank you very much</button>
+                            <button class="example-chip" data-text="Nice to meet you">Nice to meet you</button>
+                        </div>
+                    </div>
+                    <div class="loading-state hidden" id="loading-state">
+                        <div class="skeleton-grid" id="skeleton-grid"></div>
+                    </div>
+                    <div class="error-state hidden" id="error-state">
+                        <div class="error-content">
+                            <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="8" x2="12" y2="12"/>
+                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                            <h3 class="error-title" id="error-title">Something went wrong</h3>
+                            <p class="error-message" id="error-message"></p>
+                            <button class="btn btn-primary" id="retry-btn">Try Again</button>
+                        </div>
+                    </div>
+                    <div class="signs-grid" id="signs-grid"></div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Welcome Modal -->
+        <div class="modal-overlay hidden" id="welcome-modal">
+            <div class="modal modal-large" role="dialog" aria-labelledby="welcome-title">
+                <div class="modal-header">
+                    <h2 id="welcome-title">Welcome to Speech to Sign Aid</h2>
+                    <button class="btn btn-icon" id="close-welcome" aria-label="Close welcome">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body welcome-body">
+                    <div class="welcome-content">
+                        <div class="welcome-feature">
+                            <div class="feature-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                                </svg>
+                            </div>
+                            <h3>Voice Input</h3>
+                            <p>Click the microphone to start speaking. Your speech will be converted to sign language in real-time.</p>
+                        </div>
+                        <div class="welcome-feature">
+                            <div class="feature-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="4 7 4 4 20 4 20 7"/>
+                                    <line x1="9" y1="20" x2="15" y2="20"/>
+                                    <line x1="12" y1="4" x2="12" y2="20"/>
+                                </svg>
+                            </div>
+                            <h3>Text Input</h3>
+                            <p>Type or paste any text to see sign language translations. Perfect for captions and written content.</p>
+                        </div>
+                        <div class="welcome-feature">
+                            <div class="feature-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 1 1 3 0m-3 6a1.5 1.5 0 1 0-3 0v2a7.5 7.5 0 0 0 15 0v-5a1.5 1.5 0 1 0-3 0"/>
+                                </svg>
+                            </div>
+                            <h3>AI Enhanced</h3>
+                            <p>Toggle AI enhancement for better accuracy and context understanding in sign matching.</p>
+                        </div>
+                    </div>
+                    <div class="welcome-examples">
+                        <h3>Try these example phrases:</h3>
+                        <div class="example-buttons">
+                            <button class="example-btn" data-text="Hello, how are you today?">Hello, how are you today?</button>
+                            <button class="example-btn" data-text="Thank you very much">Thank you very much</button>
+                            <button class="example-btn" data-text="Nice to meet you">Nice to meet you</button>
+                            <button class="example-btn" data-text="I need help">I need help</button>
+                            <button class="example-btn" data-text="Where is the bathroom?">Where is the bathroom?</button>
+                            <button class="example-btn" data-text="Have a great day">Have a great day</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" id="get-started-btn">Get Started</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div class="modal-overlay hidden" id="settings-modal">
+            <div class="modal" role="dialog" aria-labelledby="settings-title">
+                <div class="modal-header">
+                    <h2 id="settings-title">Settings</h2>
+                    <button class="btn btn-icon" id="close-settings" aria-label="Close settings">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="setting-group">
+                        <label for="sign-size">Sign Display Size</label>
+                        <input type="range" id="sign-size" min="100" max="250" value="160">
+                        <span class="range-value" id="size-value">160px</span>
+                    </div>
+                    <div class="setting-group">
+                        <label for="animation-speed">Animation Speed</label>
+                        <input type="range" id="animation-speed" min="0.5" max="2" step="0.1" value="1">
+                        <span class="range-value" id="speed-value">1x</span>
+                    </div>
+                    <div class="setting-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="high-contrast" >
+                            <span>High Contrast Mode</span>
+                        </label>
+                    </div>
+                    <div class="setting-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-descriptions" checked>
+                            <span>Show Sign Descriptions</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="reset-settings">Reset to Defaults</button>
+                    <button class="btn btn-primary" id="save-settings">Save Settings</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vocabulary Reference (collapsible) -->
+        <aside class="vocabulary-panel" id="vocab-panel">
+            <button class="vocab-toggle" id="vocab-toggle" aria-expanded="false">
+                <span>Vocabulary Reference</span>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+            </button>
+            <div class="vocab-content hidden" id="vocab-content">
+                <div class="vocab-grid" id="vocab-grid"></div>
+            </div>
+        </aside>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
