@@ -5,7 +5,6 @@ Speech-to-Sign Aid is a real-time accessibility prototype that converts live spe
 This MVP shows that real-time speech-to-visual communication can work in classrooms, meetings, and presentations.
 
 
-
 ## What It Does
 
 Speech-to-Sign Aid:
@@ -23,7 +22,6 @@ The goal is not perfect translation, but fast and understandable communication.
 Captions can be slow and tiring to follow. Many Deaf users rely more on visual language.  
 STS provides a visual way to follow spoken content that is easier to process in live settings.
 
----
 
 ## How It Works
 
@@ -33,7 +31,6 @@ STS provides a visual way to follow spoken content that is easier to process in 
 4. Unknown words fall back to fingerspelling or text  
 5. The frontend shows the matching signs in sync with the speech  
 
----
 
 ## Built With
 
@@ -44,7 +41,6 @@ STS provides a visual way to follow spoken content that is easier to process in 
 - Gesture and sign video assets  
 - A rule-based sign mapping engine  
 
----
 
 ## Key Features
 
@@ -55,7 +51,6 @@ STS provides a visual way to follow spoken content that is easier to process in 
 - Simple and accessible user interface  
 - Optional live camera gesture demo  
 
----
 
 ## MVP Limitations
 
@@ -65,7 +60,6 @@ This is a prototype, not a full sign language translator.
 - Does not model grammar or facial expression  
 - Focuses on speed and clarity rather than full language coverage  
 
----
 
 ## What’s Next
 
@@ -76,7 +70,6 @@ Future versions will:
 - Improve avatar and sign animation  
 - Include user testing with Deaf and hard-of-hearing users  
 
----
 
 ## Project Goal
 
