@@ -17,7 +17,6 @@ Speech-to-Sign Aid:
 
 The goal is not perfect translation, but fast and understandable communication.
 
----
 
 ## Why It Matters
 
