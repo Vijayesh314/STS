@@ -1,8 +1,3 @@
-/**
- * Speech-to-Sign Aid MVP
- * Client-side JavaScript with Web Speech API and Gemini backend
- */
-
 // State
 let isListening = false
 let recognition = null
