@@ -1,1324 +1,970 @@
-/* CSS Variables */
-:root {
-  --bg-primary: #0a0a0f;
-  --bg-secondary: #12121a;
-  --bg-tertiary: #1a1a24;
-  --bg-elevated: #222230;
+/**
+ * Speech-to-Sign Aid MVP
+ * Client-side JavaScript with Web Speech API and Gemini backend
+ */
 
-  --text-primary: #f5f5f7;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
+// State
+let isListening = false
+let recognition = null
+let preferences = loadPreferences()
+let useAI = true
+let currentProcessingText = ""
+let hasSeenWelcome = localStorage.getItem("signaid-welcome-seen") === "true"
 
-  --accent-primary: #3b82f6;
-  --accent-primary-hover: #2563eb;
-  --accent-success: #22c55e;
-  --accent-warning: #f59e0b;
-  --accent-error: #ef4444;
+// DOM Elements
+const elements = {
+  // Header
+  aiToggle: document.getElementById("ai-toggle"),
+  settingsBtn: document.getElementById("settings-btn"),
 
-  --border-color: #27272a;
-  --border-radius: 12px;
-  --border-radius-sm: 8px;
-  --border-radius-lg: 16px;
+  // Stats
+  statusDot: document.querySelector(".status-dot"),
+  statusText: document.getElementById("status-text"),
+  methodIndicator: document.getElementById("method-indicator"),
+  latencyIndicator: document.getElementById("latency-indicator"),
+  matchCount: document.getElementById("match-count"),
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+  // Input
+  tabBtns: document.querySelectorAll(".tab-btn"),
+  speechPanel: document.getElementById("speech-panel"),
+  textPanel: document.getElementById("text-panel"),
+  micBtn: document.getElementById("mic-btn"),
+  micHint: document.getElementById("mic-hint"),
+  transcript: document.getElementById("transcript"),
+  textInput: document.getElementById("text-input"),
+  processBtn: document.getElementById("process-btn"),
 
-  --transition-fast: 150ms ease;
-  --transition-normal: 250ms ease;
+  // Sign Display
+  emptyState: document.getElementById("empty-state"),
+  signsGrid: document.getElementById("signs-grid"),
 
-  --sign-size: 160px;
-  --animation-speed: 1;
+  // Settings Modal
+  settingsModal: document.getElementById("settings-modal"),
+  closeSettings: document.getElementById("close-settings"),
+  signSize: document.getElementById("sign-size"),
+  sizeValue: document.getElementById("size-value"),
+  animationSpeed: document.getElementById("animation-speed"),
+  speedValue: document.getElementById("speed-value"),
+  highContrast: document.getElementById("high-contrast"),
+  showDescriptions: document.getElementById("show-descriptions"),
+  forceFingerspell: document.getElementById("force-fingerspell"),
+  resetSettings: document.getElementById("reset-settings"),
+  saveSettings: document.getElementById("save-settings"),
+
+  // Vocabulary
+  vocabToggle: document.getElementById("vocab-toggle"),
+  vocabContent: document.getElementById("vocab-content"),
+  vocabGrid: document.getElementById("vocab-grid"),
+
+  // Welcome Modal
+  welcomeModal: document.getElementById("welcome-modal"),
+  closeWelcome: document.getElementById("close-welcome"),
+  getStartedBtn: document.getElementById("get-started-btn"),
+
+  // Loading & Error States
+  loadingState: document.getElementById("loading-state"),
+  skeletonGrid: document.getElementById("skeleton-grid"),
+  errorState: document.getElementById("error-state"),
+  errorTitle: document.getElementById("error-title"),
+  errorMessage: document.getElementById("error-message"),
+  retryBtn: document.getElementById("retry-btn"),
+
+  // Examples
+  tryExampleBtn: document.getElementById("try-example-btn"),
+  quickExamples: document.getElementById("quick-examples"),
+
+  // Live Camera / Avatar
+  liveToggle: document.getElementById("live-toggle"),
+  cameraVideo: document.getElementById("camera-video"),
+  cameraCanvas: document.getElementById("camera-canvas"),
+  avatar: document.getElementById("avatar"),
+  liveSignLabel: document.getElementById("live-sign-label"),
+} 
+
+// Initialize
+document.addEventListener("DOMContentLoaded", init)
+
+function init() {
+  setupSpeechRecognition()
+  setupEventListeners()
+  setupHandTracking()
+  applyPreferences()
+  loadVocabulary()
+  checkAPIStatus()
   
-  /* Gradients */
-  --gradient-primary: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-  --gradient-secondary: linear-gradient(135deg, #1a1a24 0%, #222230 100%);
+  // Show welcome modal if first visit
+  setTimeout(() => {
+    if (!hasSeenWelcome) {
+      elements.welcomeModal.classList.remove("hidden")
+    }
+  }, 300)
 }
 
-/* High Contrast Mode */
-.high-contrast {
-  --bg-primary: #000000;
-  --bg-secondary: #0a0a0a;
-  --bg-tertiary: #141414;
-  --bg-elevated: #1e1e1e;
-  --text-primary: #ffffff;
-  --text-secondary: #e5e5e5;
-  --accent-primary: #60a5fa;
-  --border-color: #404040;
-}
-
-/* Reset & Base */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-html {
-  font-size: 16px;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  line-height: 1.6;
-  min-height: 100vh;
-}
-
-/* App Container */
-.app-container {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 1rem;
-}
-
-/* Accessibility helpers */
-.visually-hidden,
-.sr-only {
-  position: absolute !important;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(1px, 1px, 1px, 1px);
-  white-space: nowrap;
-  border: 0;
-}
-
-/* Keyboard focus & reduced-motion */
-:focus {
-  outline: none;
-}
-
-.app-container :is(.btn, .btn-icon, .tab-btn, .mic-button, #text-input, .toggle-slider):focus-visible {
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22);
-  z-index: 10;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation: none !important;
-    transition: none !important;
+// Preferences
+function loadPreferences() {
+  const defaults = {
+    signSize: 160,
+    animationSpeed: 1,
+    highContrast: false,
+    showDescriptions: true,
+    forceFingerspell: false,
   }
+
+  try {
+    const saved = localStorage.getItem("signaid-preferences")
+    return saved ? { ...defaults, ...JSON.parse(saved) } : defaults
+  } catch {
+    return defaults
+  }
+}
+
+function savePreferences() {
+  localStorage.setItem("signaid-preferences", JSON.stringify(preferences))
+}
+
+function applyPreferences() {
+  document.documentElement.style.setProperty("--sign-size", `${preferences.signSize}px`)
+  document.documentElement.style.setProperty("--animation-speed", preferences.animationSpeed)
+
+  if (preferences.highContrast) {
+    document.body.classList.add("high-contrast")
+  } else {
+    document.body.classList.remove("high-contrast")
+  }
+
+  // Update form controls
+  elements.signSize.value = preferences.signSize
+  elements.sizeValue.textContent = `${preferences.signSize}px`
+  elements.animationSpeed.value = preferences.animationSpeed
+  elements.speedValue.textContent = `${preferences.animationSpeed}x`
+  elements.highContrast.checked = preferences.highContrast
+  elements.showDescriptions.checked = preferences.showDescriptions
+  elements.forceFingerspell.checked = preferences.forceFingerspell
+}
+
+// Speech Recognition
+function setupSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+
+  if (!SpeechRecognition) {
+    elements.micBtn.disabled = true
+    elements.micHint.textContent = "Speech recognition not supported in this browser"
+    return
+  }
+
+  recognition = new SpeechRecognition()
+  recognition.continuous = true
+  recognition.interimResults = true
+  recognition.lang = "en-US"
+
+  recognition.onstart = () => {
+    isListening = true
+    updateListeningState()
+  }
+
+  recognition.onend = () => {
+    isListening = false
+    updateListeningState()
+
+    // Auto-restart if still supposed to be listening
+    if (elements.micBtn.classList.contains("listening")) {
+      try {
+        recognition.start()
+      } catch (e) {
+        console.log("Could not restart recognition")
+      }
+    }
+  }
+
+  recognition.onresult = (event) => {
+    let interimTranscript = ""
+    let finalTranscript = ""
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript
+      if (event.results[i].isFinal) {
+        finalTranscript += transcript
+      } else {
+        interimTranscript += transcript
+      }
+    }
+
+    // Display transcript
+    elements.transcript.textContent = finalTranscript || interimTranscript
+
+    // Process final transcript
+    if (finalTranscript) {
+      processText(finalTranscript)
+    }
+  }
+
+  recognition.onerror = (event) => {
+    console.error("Speech recognition error:", event.error)
+    if (event.error !== "no-speech") {
+      setStatus("error", `Error: ${event.error}`)
+    }
+  }
+}
+
+function updateListeningState() {
+  if (isListening) {
+    elements.micBtn.classList.add("listening")
+    elements.micHint.textContent = "Listening... Click to stop"
+    elements.statusDot.classList.add("listening")
+    setStatus("listening", "Listening")
+  } else {
+    elements.micBtn.classList.remove("listening")
+    elements.micHint.textContent = "Click to start listening"
+    elements.statusDot.classList.remove("listening")
+    setStatus("ready", "Ready")
+  }
+}
+
+function toggleListening() {
+  if (!recognition) return
+
+  if (isListening) {
+    recognition.stop()
+    elements.micBtn.classList.remove("listening")
+  } else {
+    try {
+      recognition.start()
+      elements.micBtn.classList.add("listening")
+    } catch (e) {
+      console.error("Could not start recognition:", e)
+    }
+  }
+}
+
+// Text Processing
+async function processText(text) {
+  if (!text.trim()) return
+
+  currentProcessingText = text.trim()
+  const startTime = performance.now()
+  setStatus("processing", "Processing...")
+  
+  // Hide error state and show loading
+  hideErrorState()
+  showLoadingState()
+
+  try {
+    const response = await fetch("/api/match", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: currentProcessingText,
+        use_ai: useAI,
+        force_fingerspell: preferences.forceFingerspell === true,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    const latency = Math.round(performance.now() - startTime)
+
+    hideLoadingState()
+    displaySigns(data.signs)
+    updateStats(data.method, latency, data.signs.length)
+    setStatus("ready", "Ready")
+  } catch (error) {
+    console.error("Error processing text:", error)
+    hideLoadingState()
+    
+    let errorMsg = "Unable to process your request."
+    let errorTitle = "Processing Failed"
+    
+    if (error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+      errorTitle = "Connection Error"
+      errorMsg = "Could not connect to the server. Please check your internet connection and try again."
+    } else if (error.message.includes("Server error")) {
+      errorTitle = "Server Error"
+      errorMsg = "The server encountered an error. Please try again in a moment."
+    } else if (error.message) {
+      errorMsg = error.message
+    }
+    
+    showErrorState(errorTitle, errorMsg)
+    setStatus("error", "Error")
+  }
+}
+
+// Display Signs
+function displaySigns(signs) {
+  if (!signs || signs.length === 0) {
+    elements.signsGrid.innerHTML = ""
+    elements.emptyState.classList.remove("hidden")
+    elements.signsGrid.classList.add("hidden")
+    hideLoadingState()
+    return
+  }
+
+  showSignsGrid()
+  hideLoadingState()
+
+  elements.signsGrid.innerHTML = signs
+    .map(
+      (sign, index) => `
+        <div class="sign-card" style="--index: ${index};">
+            <div class="sign-animation">
+                ${getSignVisualization(sign)}
+            </div>
+            <div class="sign-word">${sign.word}</div>
+            <div class="sign-category">${sign.category}</div>
+            ${preferences.showDescriptions ? `<div class="sign-description">${sign.description}</div>` : ""}
+            <div class="sign-confidence">${Math.round(sign.confidence * 100)}% match</div>
+        </div>
+    `,
+    )
+    .join("")
+
+  // After rendering, initialize any fingerspell video players
+  try {
+    setupFingerspellPlayers()
+  } catch (e) {
+    console.warn("Fingerspell player setup failed:", e)
+  }
+}
+
+// Loading States
+function showLoadingState() {
+  elements.emptyState.classList.add("hidden")
+  elements.errorState.classList.add("hidden")
+  elements.signsGrid.classList.add("hidden")
+  elements.loadingState.classList.remove("hidden")
+  
+  // Generate skeleton loaders
+  const skeletonCount = 6
+  elements.skeletonGrid.innerHTML = Array.from({ length: skeletonCount }, (_, i) => `
+    <div class="skeleton-card" style="--index: ${i};">
+      <div class="skeleton-animation"></div>
+      <div class="skeleton-line skeleton-title"></div>
+      <div class="skeleton-line skeleton-category"></div>
+      <div class="skeleton-line skeleton-description"></div>
+    </div>
+  `).join("")
+}
+
+function hideLoadingState() {
+  elements.loadingState.classList.add("hidden")
+}
+
+// Error States
+function showErrorState(title, message) {
+  elements.emptyState.classList.add("hidden")
+  elements.loadingState.classList.add("hidden")
+  elements.signsGrid.classList.add("hidden")
+  elements.errorState.classList.remove("hidden")
+  elements.errorTitle.textContent = title
+  elements.errorMessage.textContent = message
+}
+
+function hideErrorState() {
+  elements.errorState.classList.add("hidden")
+}
+
+function showSignsGrid() {
+  elements.emptyState.classList.add("hidden")
+  elements.signsGrid.classList.remove("hidden")
+}
+
+function normalizeWord(w) {
+  return String(w || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function getSignVisualization(sign) {
+  // Enhanced sign visualization - structure ready for videos/GIFs
+  // For now, using improved animated SVG placeholders
+  const raw = String(sign.word || "")
+  const word = normalizeWord(raw)
+  const compact = word.replace(/\s+/g, "")
+  const category = sign.category?.toLowerCase() || ""
+
+  // If user requested forced fingerspelling, render every sign as letters
+  if (preferences.forceFingerspell) {
+    const letters = sign.letters && Array.isArray(sign.letters) && sign.letters.length > 0
+      ? sign.letters
+      : normalizeWord(raw).replace(/\s+/g, "").split("")
+    console.log("Force-fingerspell active - letters:", letters)
+    return getFingerspellVisualization({ letters, letter_videos: sign.letter_videos }, preferences.animationSpeed)
+  }
+
+  // Prefer gesture visualization for common words (avoid fingerspelling when a gesture exists)
+  const gesturePreferred = [
+    "hello",
+    "hi",
+    "thank",
+    "thank you",
+    "thanks",
+    "how are you",
+    "nice to meet you",
+    "i need help",
+    "where is the bathroom",
+    "have a great day",
+  ]
+
+  const isGesture = gesturePreferred.some((g) => {
+    const gnorm = g.replace(/[^a-z0-9]/g, "").toLowerCase()
+    return word.includes(gnorm) || compact.includes(gnorm) || gnorm.includes(compact)
+  })
+
+  // If we believe a gesture is appropriate, try gesture assets (video/gif/svg) first.
+  // Override fingerspelling even if `letters` were provided.
+  if (isGesture) {
+    if (sign.letters && Array.isArray(sign.letters) && sign.letters.length > 0) {
+      console.log("Overriding fingerspelling with gesture for:", raw)
+    }
+
+    if (sign.video_url) {
+      return `<video class="sign-video" autoplay loop muted playsinline>
+        <source src="${sign.video_url}" type="video/mp4">
+      </video>`
+    }
+
+    if (sign.gif_url) {
+      return `<img class="sign-gif" src="${sign.gif_url}" alt="${sign.word} sign" />`
+    }
+
+    // Use our animated SVG for known gestures
+    return getAnimatedSignSVG(word, category)
+  }
+
+  // Fingerspelling: if the backend returned a letters array, render that animation
+  if (sign.letters && Array.isArray(sign.letters) && sign.letters.length > 0) {
+    return getFingerspellVisualization({ letters: sign.letters, letter_videos: sign.letter_videos }, preferences.animationSpeed)
+  }
+
+  // Check if we have a video/GIF path (would come from backend)
+  if (sign.video_url) {
+    return `<video class="sign-video" autoplay loop muted playsinline>
+      <source src="${sign.video_url}" type="video/mp4">
+    </video>`
+  }
+
+  if (sign.gif_url) {
+    return `<img class="sign-gif" src="${sign.gif_url}" alt="${sign.word} sign" />`
+  }
+
+  // Fallback to animated SVG based on category/word
+  return getAnimatedSignSVG(word, category)
 } 
 
-/* Header */
-.app-container .header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: var(--bg-primary);
-  border-bottom: 1px solid var(--border-color);
-  padding: 1rem 0;
-}
-
-.app-container .header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-}
-
-.app-container .logo {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.app-container .logo-icon {
-  width: 32px;
-  height: 32px;
-  color: var(--accent-primary);
-}
-
-.app-container .logo h1,
-.app-container .logo__title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.app-container .header-controls {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-} 
-
-/* AI Toggle */
-.app-container .ai-toggle {
-  display: flex;
-  align-items: center;
-}
-
-.app-container .toggle-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-}
-
-.app-container .ai-toggle .toggle-label input {
-  display: none;
-}
-
-.app-container .toggle-slider {
-  width: 44px;
-  height: 24px;
-  background: var(--bg-tertiary);
-  border-radius: 12px;
-  position: relative;
-  transition: var(--transition-normal);
-  border: 1px solid var(--border-color);
-  user-select: none;
-}
-
-.app-container .toggle-slider::before {
-  content: "";
-  position: absolute;
-  width: 18px;
-  height: 18px;
-  background: var(--text-secondary);
-  border-radius: 50%;
-  top: 2px;
-  left: 2px;
-  transition: var(--transition-normal);
-}
-
-.app-container .ai-toggle .toggle-label input:checked + .toggle-slider {
-  background: var(--accent-primary);
-  border-color: var(--accent-primary);
-}
-
-.app-container .ai-toggle .toggle-label input:checked + .toggle-slider::before {
-  transform: translateX(20px);
-  background: white;
-}
-
-.app-container .toggle-text {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-} 
-
-/* Buttons */
-.app-container .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  border: none;
-  border-radius: var(--border-radius-sm);
-  cursor: pointer;
-  transition: var(--transition-fast);
-}
-
-.app-container .btn-primary {
-  background: var(--accent-primary);
-  color: white;
-}
-
-.app-container .btn-primary:hover {
-  background: var(--accent-primary-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-}
-
-.app-container .btn-primary:active {
-  transform: translateY(0);
-}
-
-.app-container .btn-secondary {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-}
-
-.app-container .btn-secondary:hover {
-  background: var(--bg-elevated);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
-}
-
-.app-container .btn-secondary:active {
-  transform: translateY(0);
-}
-
-.app-container .btn-icon {
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
-  color: var(--text-secondary);
-}
-
-.app-container .btn-icon:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  transform: scale(1.05);
-}
-
-.app-container .btn-icon:active {
-  transform: scale(0.95);
-}
-
-.app-container .btn-icon svg {
-  width: 20px;
-  height: 20px;
-}
-
-/* keyboard focus styles */
-.app-container .btn:focus-visible,
-.app-container .btn-icon:focus-visible,
-.app-container .tab-btn:focus-visible {
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.22);
-}
-
-/* Performance hints */
-.app-container .sign-card {
-  will-change: transform, opacity;
-}
-
-/* Main Content */
-.app-container .main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  padding: 1.5rem 0;
-}
-
-/* Stats Bar */
-.app-container .stats-bar {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-  padding: 1rem;
-  background: var(--bg-secondary);
-  border-radius: var(--border-radius);
-  border: 1px solid var(--border-color);
-}
-
-.app-container .stats-bar .stat {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding-right: 1rem;
-  border-right: 1px solid var(--border-color);
-}
-
-.app-container .stats-bar .stat:last-child {
-  border-right: none;
-}
-
-.app-container .stats-bar .stat-label {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.app-container .stats-bar .stat-value {
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: var(--text-primary);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.app-container .status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent-success);
-}
-
-.app-container .status-dot.listening {
-  background: var(--accent-warning);
-  animation: pulse 1.5s infinite;
-}
-
-.app-container .status-dot.processing {
-  background: var(--accent-warning);
-  animation: pulse 1.5s infinite;
-}
-
-.app-container .status-dot.error {
-  background: var(--accent-error);
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
+function getAnimatedSignSVG(word, category) {
+  // More detailed hand/gesture SVGs with animation potential
+  const signIcons = {
+    hello: `<svg class="sign-svg" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2">
+      <g class="hand-animation">
+        <path d="M30 40 L50 20 L70 40" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M40 50 L50 40 L60 50" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="50" cy="50" r="8" fill="currentColor" opacity="0.3"/>
+        <path d="M30 60 Q50 70 70 60" stroke-linecap="round"/>
+      </g>
+    </svg>`,
+    thank: `<svg class="sign-svg" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2">
+      <g class="hand-animation">
+        <path d="M50 20 L50 60" stroke-linecap="round"/>
+        <path d="M30 50 Q50 40 70 50" stroke-linecap="round"/>
+        <circle cx="50" cy="30" r="6" fill="currentColor" opacity="0.3"/>
+      </g>
+    </svg>`,
+    default: `<svg class="sign-svg" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2">
+      <g class="hand-animation">
+        <circle cx="50" cy="50" r="30" opacity="0.2"/>
+        <path d="M35 50 L50 35 L65 50" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M50 50 L50 70" stroke-linecap="round"/>
+        <circle cx="50" cy="50" r="8" fill="currentColor" opacity="0.4"/>
+      </g>
+    </svg>`
   }
-  50% {
-    opacity: 0.5;
+  
+  // Match by word or category
+  if (word.includes("hello") || word.includes("hi")) return signIcons.hello
+  if (word.includes("thank")) return signIcons.thank
+  
+  return signIcons.default
+}
+
+function getFingerspellVisualization(signObj, speed) {
+  // signObj: { letters: ["a","b"], letter_videos: [url|null,...] }
+  const letters = Array.isArray(signObj) ? signObj : signObj.letters || []
+
+  // If we have per-letter video URLs, render a sequential video player container
+  const videos = (signObj && signObj.letter_videos) || []
+  if (Array.isArray(videos) && videos.length > 0) {
+    const parts = letters.map((ch, i) => {
+      const v = videos[i]
+      if (v) {
+        return `
+          <video class="fs-video" data-index="${i}" playsinline muted preload="auto">
+            <source src="${v}" type="video/mp4">
+            ${String(ch).toUpperCase()}
+          </video>
+        `
+      }
+      // fallback to letter block if no video for this letter
+      return `<div class="fs-letter-fallback">${String(ch).toUpperCase()}</div>`
+    })
+
+    return `<div class="fingerspell fingerspell-videos" role="img" aria-label="Finger-spelled word">
+        ${parts.join("")}
+      </div>`
   }
-} 
 
-/* Input Section */
-.app-container .input-section {
-  background: var(--bg-secondary);
-  border-radius: var(--border-radius-lg);
-  border: 1px solid var(--border-color);
-  overflow: hidden;
+  // Fallback visual: animated letters
+  const baseDelay = 0.25 // seconds per letter at 1x
+  const delayPer = baseDelay / Math.max(0.1, speed)
+  const totalDuration = letters.length * delayPer
+
+  const letterHtml = letters
+    .map((ch, i) => `
+      <div class="fs-letter" aria-hidden="true" style="animation-delay: ${(
+        i * delayPer
+      ).toFixed(2)}s">${String(ch).toUpperCase()}</div>
+    `)
+    .join("")
+
+  return `<div class="fingerspell" role="img" aria-label="Finger-spelled word">
+      <div class="fs-letters" style="--fs-duration: ${totalDuration}s">${letterHtml}</div>
+    </div>`
 }
 
-.app-container .input-mode-tabs {
-  display: flex;
-  border-bottom: 1px solid var(--border-color);
+
+function setupFingerspellPlayers() {
+  // Find containers with class 'fingerspell-videos' and play contained videos sequentially
+  document.querySelectorAll('.fingerspell-videos').forEach((container) => {
+    const videos = Array.from(container.querySelectorAll('video.fs-video'))
+    if (!videos.length) return
+
+    // Ensure only one plays at a time and start from first
+    videos.forEach((v) => {
+      v.pause()
+      v.currentTime = 0
+      v.removeAttribute('data-playing')
+      v.addEventListener('ended', onVideoEnded)
+    })
+
+    let idx = 0
+    function playIndex(i) {
+      if (i < 0 || i >= videos.length) return
+      const v = videos[i]
+      // play and mark
+      v.setAttribute('data-playing', 'true')
+      const p = v.play()
+      if (p && typeof p.then === 'function') {
+        p.catch(() => {
+          // ignore play errors (autoplay restrictions)
+          v.muted = true
+          v.play().catch(() => {})
+        })
+      }
+    }
+
+    function onVideoEnded(e) {
+      const current = e.target
+      current.removeEventListener('ended', onVideoEnded)
+      idx += 1
+      if (idx < videos.length) {
+        playIndex(idx)
+      }
+    }
+
+    // Start sequence
+    playIndex(0)
+  })
 }
 
-.app-container .tab-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 1rem;
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  font-size: 0.9375rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: var(--transition-fast);
-}
+// Stats & Status
+function setStatus(type, text) {
+  elements.statusText.textContent = text
+  elements.statusDot.className = "status-dot"
 
-.app-container .tab-btn:hover {
-  color: var(--text-primary);
-  background: var(--bg-tertiary);
-  transform: translateY(-1px);
-}
-
-.app-container .tab-btn:active {
-  transform: translateY(0);
-}
-
-.app-container .tab-btn.active {
-  color: var(--accent-primary);
-  background: var(--bg-tertiary);
-  border-bottom: 2px solid var(--accent-primary);
-}
-
-.app-container .tab-btn svg {
-  width: 20px;
-  height: 20px;
-}
-
-/* Input Panels */
-.app-container .input-panel {
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-.app-container .input-panel.hidden {
-  display: none;
-} 
-
-/* Microphone Button */
-.mic-button {
-  position: relative;
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: var(--bg-tertiary);
-  border: 2px solid var(--border-color);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: var(--transition-normal);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.mic-button:hover {
-  background: var(--bg-elevated);
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-  transform: scale(1.05);
-}
-
-.mic-button:active {
-  transform: scale(0.95);
-}
-
-.mic-button.listening {
-  background: var(--accent-primary);
-  border-color: var(--accent-primary);
-  color: white;
-}
-
-.mic-icon {
-  width: 32px;
-  height: 32px;
-  z-index: 1;
-}
-
-.pulse-ring {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  border: 2px solid var(--accent-primary);
-  opacity: 0;
-  animation: none;
-}
-
-.mic-button.listening .pulse-ring {
-  animation: pulse-ring 1.5s infinite;
-}
-
-@keyframes pulse-ring {
-  0% {
-    transform: scale(1);
-    opacity: 0.8;
-  }
-  100% {
-    transform: scale(1.5);
-    opacity: 0;
+  if (type === "listening") {
+    elements.statusDot.classList.add("listening")
+  } else if (type === "processing") {
+    elements.statusDot.classList.add("processing")
+  } else if (type === "error") {
+    elements.statusDot.classList.add("error")
   }
 }
 
-.mic-hint {
-  font-size: 0.875rem;
-  color: var(--text-muted);
+function updateStats(method, latency, count) {
+  elements.methodIndicator.textContent = method === "gemini" ? "Gemini AI" : "Local"
+  elements.latencyIndicator.textContent = `${latency}ms`
+  elements.matchCount.textContent = count
 }
 
-/* Transcript Box */
-.transcript-box {
-  width: 100%;
-  max-width: 600px;
-  min-height: 60px;
-  padding: 1rem;
-  background: var(--bg-tertiary);
-  border-radius: var(--border-radius);
-  border: 1px solid var(--border-color);
-}
+// Vocabulary
+async function loadVocabulary() {
+  try {
+    const response = await fetch("/api/vocabulary")
+    const data = await response.json()
 
-.transcript-text {
-  font-size: 1.125rem;
-  color: var(--text-primary);
-  text-align: center;
-  min-height: 1.5em;
-}
-
-.transcript-text:empty::before {
-  content: "Transcript will appear here...";
-  color: var(--text-muted);
-}
-
-/* Text Input */
-.text-input-container {
-  width: 100%;
-  max-width: 600px;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-#text-input {
-  width: 100%;
-  padding: 1rem;
-  font-size: 1rem;
-  font-family: inherit;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  color: var(--text-primary);
-  resize: vertical;
-  transition: var(--transition-fast);
-}
-
-#text-input:focus {
-  outline: none;
-  border-color: var(--accent-primary);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-}
-
-#text-input::placeholder {
-  color: var(--text-muted);
-}
-
-/* Sign Display Section */
-.app-container .sign-display-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.app-container .section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-}
-
-.app-container .section-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.app-container .btn-sm {
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  gap: 0.375rem;
-}
-
-.app-container .sign-container {
-  flex: 1;
-  min-height: 300px;
-  background: var(--bg-secondary);
-  border-radius: var(--border-radius-lg);
-  border: 1px solid var(--border-color);
-  padding: 1.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Empty State */
-.app-container .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.5rem;
-  padding: 3rem 2rem;
-  text-align: center;
-}
-
-.app-container .empty-state.hidden {
-  display: none;
-}
-
-.app-container .empty-illustration {
-  width: 120px;
-  height: 120px;
-  color: var(--accent-primary);
-  opacity: 0.6;
-  animation: float 3s ease-in-out infinite;
-}
-
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-10px);
+    elements.vocabGrid.innerHTML = Object.keys(data.vocabulary)
+      .sort()
+      .map((word) => `<div class="vocab-item">${word}</div>`)
+      .join("")
+  } catch (error) {
+    console.error("Could not load vocabulary:", error)
+    elements.vocabGrid.innerHTML = '<div class="vocab-item">Could not load vocabulary</div>'
   }
 }
 
-.app-container .empty-icon {
-  width: 100%;
-  height: 100%;
-}
+// API Status
+async function checkAPIStatus() {
+  try {
+    const response = await fetch("/api/status")
+    const data = await response.json()
 
-.app-container .empty-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.app-container .empty-description {
-  font-size: 0.9375rem;
-  color: var(--text-secondary);
-  max-width: 400px;
-  margin: 0;
-}
-
-.app-container .example-phrases {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
-.app-container .example-label {
-  font-size: 0.875rem;
-  color: var(--text-muted);
-  margin-right: 0.25rem;
-}
-
-.app-container .example-chip {
-  padding: 0.5rem 1rem;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: var(--transition-fast);
-}
-
-.app-container .example-chip:hover {
-  background: var(--bg-elevated);
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-  transform: translateY(-2px);
-}
-
-/* Loading State */
-.app-container .loading-state {
-  width: 100%;
-  padding: 2rem;
-}
-
-.app-container .loading-state.hidden {
-  display: none;
-}
-
-.app-container .skeleton-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  justify-content: center;
-  width: 100%;
-}
-
-.app-container .skeleton-card {
-  width: var(--sign-size);
-  background: var(--bg-tertiary);
-  border-radius: var(--border-radius);
-  border: 1px solid var(--border-color);
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  animation: fadeInUp 0.3s ease forwards;
-  animation-delay: calc(var(--index) * 0.1s);
-  opacity: 0;
-}
-
-.app-container .skeleton-animation {
-  width: 80px;
-  height: 80px;
-  background: var(--bg-elevated);
-  border-radius: var(--border-radius-sm);
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
-}
-
-.app-container .skeleton-line {
-  height: 12px;
-  background: var(--bg-elevated);
-  border-radius: 6px;
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
-}
-
-.app-container .skeleton-title {
-  width: 80px;
-}
-
-.app-container .skeleton-category {
-  width: 60px;
-  height: 10px;
-}
-
-.app-container .skeleton-description {
-  width: 100px;
-  height: 10px;
-}
-
-@keyframes skeleton-pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
+    if (!data.gemini_configured) {
+      elements.aiToggle.checked = false
+      elements.aiToggle.disabled = true
+      elements.methodIndicator.textContent = "Local only"
+      useAI = false
+    }
+  } catch (error) {
+    console.error("Could not check API status:", error)
   }
 }
 
-/* Error State */
-.app-container .error-state {
-  width: 100%;
-  padding: 3rem 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.app-container .error-state.hidden {
-  display: none;
-}
-
-.app-container .error-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-  text-align: center;
-  max-width: 400px;
-}
-
-.app-container .error-icon {
-  width: 64px;
-  height: 64px;
-  color: var(--accent-error);
-  opacity: 0.8;
-}
-
-.app-container .error-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.app-container .error-message {
-  font-size: 0.9375rem;
-  color: var(--text-secondary);
-  margin: 0;
-  line-height: 1.5;
-}
-
-/* Signs Grid */
-.app-container .signs-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  justify-content: center;
-  width: 100%;
-}
-
-.app-container .signs-grid.hidden {
-  display: none;
-}
-
-/* Sign Card */
-.app-container .sign-card {
-  width: var(--sign-size);
-  background: var(--bg-tertiary);
-  border-radius: var(--border-radius);
-  border: 1px solid var(--border-color);
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  animation: fadeInUp 0.3s ease forwards;
-  animation-delay: calc(var(--index) * 0.1s);
-  opacity: 0;
-  will-change: transform, opacity;
-  transition: var(--transition-normal);
-  cursor: pointer;
-}
-
-.app-container .sign-card:hover {
-  transform: translateY(-4px);
-  border-color: var(--accent-primary);
-  box-shadow: 0 8px 16px rgba(59, 130, 246, 0.2);
-  background: var(--bg-elevated);
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.app-container .sign-animation {
-  width: 80px;
-  height: 80px;
-  background: var(--bg-elevated);
-  border-radius: var(--border-radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  overflow: hidden;
-}
-
-.app-container .sign-animation::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: var(--gradient-primary);
-  opacity: 0.1;
-  border-radius: var(--border-radius-sm);
-}
-
-.app-container .sign-animation svg,
-.app-container .sign-svg {
-  width: 48px;
-  height: 48px;
-  color: var(--accent-primary);
-  position: relative;
-  z-index: 1;
-  animation: sign-pulse 2s ease-in-out infinite;
-}
-
-/* Fingerspelling animation styles */
-.fingerspell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  z-index: 1;
-}
-
-.fs-letters {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  justify-content: center;
-}
-
-.fs-letter {
-  width: 44px;
-  height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 1.125rem;
-  color: var(--accent-primary);
-  background: var(--bg-elevated);
-  border-radius: 8px;
-  box-shadow: var(--shadow-sm);
-  opacity: 0;
-  transform: translateY(8px) scale(0.98);
-  animation-name: fs-pop;
-  animation-duration: var(--fs-duration, 1.2s);
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-  animation-fill-mode: both;
-}
-
-@keyframes fs-pop {
-  0% { opacity: 0; transform: translateY(10px) scale(0.96); }
-  12% { opacity: 1; transform: translateY(0) scale(1); }
-  60% { opacity: 1; transform: translateY(0) scale(1); }
-  100% { opacity: 0; transform: translateY(-8px) scale(0.94); }
-}
-
-.app-container .sign-video,
-.app-container .sign-gif {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  border-radius: var(--border-radius-sm);
-}
-
-@keyframes sign-pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 0.8;
-  }
-}
-
-.app-container .sign-animation svg,
-.app-container .sign-svg {
-  width: 48px;
-  height: 48px;
-  color: var(--accent-primary);
-  position: relative;
-  z-index: 1;
-  animation: sign-pulse 2s ease-in-out infinite;
-}
-
-.app-container .sign-word {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  text-transform: capitalize;
-} 
-
-.app-container .sign-category {
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  background: var(--bg-elevated);
-  border-radius: 4px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-}
-
-.app-container .sign-description {
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-  text-align: center;
-  line-height: 1.4;
-}
-
-.app-container .sign-confidence {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-/* Modal */
-.app-container .modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-  padding: 1rem;
-}
-
-.app-container .modal-overlay.hidden {
-  display: none;
-}
-
-.app-container .modal {
-  width: 100%;
-  max-width: 480px;
-  background: var(--bg-secondary);
-  border-radius: var(--border-radius-lg);
-  border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-lg);
-  animation: modalSlideIn 0.3s ease;
-}
-
-.app-container .modal-large {
-  max-width: 600px;
-}
-
-@keyframes modalSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-20px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.app-container .modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.app-container .modal-header h2 {
-  font-size: 1.125rem;
-  font-weight: 600;
-}
-
-.app-container .modal-body {
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.app-container .modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1.25rem 1.5rem;
-  border-top: 1px solid var(--border-color);
-}
-
-/* Ensure modal controls show keyboard focus */
-.app-container .modal :is(.btn, .btn-icon):focus-visible {
-  box-shadow: 0 0 0 4px rgba(59,130,246,0.22);
-}
-
-/* Settings */
-.setting-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.setting-group label {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-}
-
-.setting-group input[type="range"] {
-  width: 100%;
-  height: 6px;
-  background: var(--bg-tertiary);
-  border-radius: 3px;
-  appearance: none;
-  cursor: pointer;
-}
-
-.setting-group input[type="range"]::-webkit-slider-thumb {
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  background: var(--accent-primary);
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.range-value {
-  font-size: 0.875rem;
-  color: var(--text-muted);
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  cursor: pointer;
-}
-
-.checkbox-label input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent-primary);
-}
-
-/* Welcome Modal */
-.app-container .welcome-body {
-  padding: 2rem 1.5rem;
-}
-
-.app-container .welcome-content {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.app-container .welcome-feature {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  text-align: center;
-  padding: 1rem;
-  background: var(--bg-tertiary);
-  border-radius: var(--border-radius);
-  border: 1px solid var(--border-color);
-  transition: var(--transition-normal);
-}
-
-.app-container .welcome-feature:hover {
-  transform: translateY(-2px);
-  border-color: var(--accent-primary);
-  box-shadow: var(--shadow-md);
-}
-
-.app-container .feature-icon {
-  width: 48px;
-  height: 48px;
-  color: var(--accent-primary);
-  background: var(--bg-elevated);
-  border-radius: var(--border-radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.app-container .feature-icon svg {
-  width: 24px;
-  height: 24px;
-}
-
-.app-container .welcome-feature h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.app-container .welcome-feature p {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  margin: 0;
-  line-height: 1.5;
-}
-
-.app-container .welcome-examples {
-  margin-top: 2rem;
-  padding-top: 2rem;
-  border-top: 1px solid var(--border-color);
-}
-
-.app-container .welcome-examples h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 1rem;
-}
-
-.app-container .example-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.app-container .example-btn {
-  padding: 0.625rem 1.25rem;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: var(--transition-fast);
-}
-
-.app-container .example-btn:hover {
-  background: var(--bg-elevated);
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-  transform: translateY(-2px);
-}
-
-/* Vocabulary Panel */
-.app-container .vocabulary-panel {
-  margin-top: auto;
-  background: var(--bg-secondary);
-  border-radius: var(--border-radius-lg);
-  border: 1px solid var(--border-color);
-  margin-bottom: 1.5rem;
-  transition: var(--transition-normal);
-}
-
-.app-container .vocabulary-panel:hover {
-  border-color: var(--accent-primary);
-}
-
-.app-container .vocab-toggle {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.5rem;
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  font-size: 0.9375rem;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.app-container .vocab-toggle:hover {
-  color: var(--text-primary);
-}
-
-.app-container .vocab-toggle .chevron {
-  width: 20px;
-  height: 20px;
-  transition: var(--transition-normal);
-}
-
-.app-container .vocab-toggle[aria-expanded="true"] .chevron {
-  transform: rotate(180deg);
-}
-
-.app-container .vocab-content {
-  padding: 0 1.5rem 1.5rem;
-  border-top: 1px solid var(--border-color);
-}
-
-.app-container .vocab-content.hidden {
-  display: none;
-}
-
-.app-container .vocab-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 0.5rem;
-  margin-top: 1rem;
-}
-
-.app-container .vocab-item {
-  padding: 0.5rem 0.75rem;
-  background: var(--bg-tertiary);
-  border-radius: var(--border-radius-sm);
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  text-transform: capitalize;
-}
-
-/* Responsive */
-@media (max-width: 640px) {
-  .app-container .logo h1 {
-    font-size: 1rem;
+// Event Listeners
+function setupEventListeners() {
+  // AI Toggle
+  elements.aiToggle.addEventListener("change", (e) => {
+    useAI = e.target.checked
+  })
+
+  // Tab switching
+  elements.tabBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mode = btn.dataset.mode
+
+      elements.tabBtns.forEach((b) => b.classList.remove("active"))
+      btn.classList.add("active")
+
+      if (mode === "speech") {
+        elements.speechPanel.classList.remove("hidden")
+        elements.textPanel.classList.add("hidden")
+      } else {
+        elements.speechPanel.classList.add("hidden")
+        elements.textPanel.classList.remove("hidden")
+
+        // Stop listening when switching to text mode
+        if (isListening && recognition) {
+          recognition.stop()
+          elements.micBtn.classList.remove("listening")
+        }
+      }
+    })
+  })
+
+  // Microphone
+  elements.micBtn.addEventListener("click", toggleListening)
+
+  // Text input
+  elements.processBtn.addEventListener("click", () => {
+    const text = elements.textInput.value.trim()
+    if (text) {
+      elements.transcript.textContent = text
+      processText(text)
+    }
+  })
+
+  elements.textInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      elements.processBtn.click()
+    }
+  })
+
+  // Settings
+  elements.settingsBtn.addEventListener("click", () => {
+    elements.settingsModal.classList.remove("hidden")
+  })
+
+  elements.closeSettings.addEventListener("click", () => {
+    elements.settingsModal.classList.add("hidden")
+  })
+
+  elements.settingsModal.addEventListener("click", (e) => {
+    if (e.target === elements.settingsModal) {
+      elements.settingsModal.classList.add("hidden")
+    }
+  })
+
+  elements.signSize.addEventListener("input", (e) => {
+    elements.sizeValue.textContent = `${e.target.value}px`
+  })
+
+  elements.animationSpeed.addEventListener("input", (e) => {
+    elements.speedValue.textContent = `${e.target.value}x`
+  })
+
+  elements.resetSettings.addEventListener("click", () => {
+    preferences = loadPreferences()
+    applyPreferences()
+  })
+
+  elements.saveSettings.addEventListener("click", () => {
+    preferences.signSize = Number.parseInt(elements.signSize.value)
+    preferences.animationSpeed = Number.parseFloat(elements.animationSpeed.value)
+    preferences.highContrast = elements.highContrast.checked
+    preferences.showDescriptions = elements.showDescriptions.checked
+    preferences.forceFingerspell = elements.forceFingerspell.checked
+
+    savePreferences()
+    applyPreferences()
+    elements.settingsModal.classList.add("hidden")
+  })
+
+  // Vocabulary panel
+  elements.vocabToggle.addEventListener("click", () => {
+    const isExpanded = elements.vocabToggle.getAttribute("aria-expanded") === "true"
+    elements.vocabToggle.setAttribute("aria-expanded", !isExpanded)
+    elements.vocabContent.classList.toggle("hidden")
+  })
+
+  // Welcome Modal
+  elements.closeWelcome.addEventListener("click", closeWelcomeModal)
+  elements.getStartedBtn.addEventListener("click", closeWelcomeModal)
+  elements.welcomeModal.addEventListener("click", (e) => {
+    if (e.target === elements.welcomeModal) {
+      closeWelcomeModal()
+    }
+  })
+
+  // Example buttons in welcome modal
+  document.querySelectorAll(".example-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const text = btn.dataset.text
+      closeWelcomeModal()
+      setTimeout(() => {
+        elements.textInput.value = text
+        elements.transcript.textContent = text
+        processText(text)
+      }, 300)
+    })
+  })
+
+  // Quick examples in empty state
+  document.querySelectorAll(".example-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const text = chip.dataset.text
+      elements.textInput.value = text
+      elements.transcript.textContent = text
+      processText(text)
+    })
+  })
+
+  // Try example button
+  elements.tryExampleBtn.addEventListener("click", () => {
+    const examples = [
+      "Hello, how are you today?",
+      "Thank you very much",
+      "Nice to meet you",
+      "I need help",
+      "Where is the bathroom?",
+      "Have a great day"
+    ]
+    const randomExample = examples[Math.floor(Math.random() * examples.length)]
+    elements.textInput.value = randomExample
+    elements.transcript.textContent = randomExample
+    processText(randomExample)
+  })
+
+  // Retry button
+  elements.retryBtn.addEventListener("click", () => {
+    if (currentProcessingText) {
+      processText(currentProcessingText)
+    }
+  })
+}
+
+function closeWelcomeModal() {
+  elements.welcomeModal.classList.add("hidden")
+  localStorage.setItem("signaid-welcome-seen", "true")
+  hasSeenWelcome = true
+}
+
+// --- Live hand-tracking & avatar demo
+let cameraInstance = null
+const gestureHistory = []
+const GESTURE_WINDOW = 18
+const GESTURE_THRESHOLD_WAVE = 0.03
+
+function setupHandTracking() {
+  // Re-query DOM elements in case the elements map was created before DOM nodes were present
+  elements.liveToggle = elements.liveToggle || document.getElementById("live-toggle")
+  elements.cameraVideo = elements.cameraVideo || document.getElementById("camera-video")
+  elements.cameraCanvas = elements.cameraCanvas || document.getElementById("camera-canvas")
+  elements.avatar = elements.avatar || document.getElementById("avatar")
+  elements.liveSignLabel = elements.liveSignLabel || document.getElementById("live-sign-label")
+  elements.liveStatus = elements.liveStatus || document.getElementById("live-status")
+
+  if (!elements.liveToggle) {
+    console.warn("Live toggle button not found; hand-tracking disabled")
+    return
   }
 
-  .app-container .toggle-text {
-    display: none;
-  }
+  // Avoid attaching multiple handlers
+  if (elements.liveToggle.__hasLiveHandler) return
+  elements.liveToggle.__hasLiveHandler = true
 
-  .app-container .stats-bar {
-    gap: 0.75rem;
-  }
-
-  .app-container .stats-bar .stat {
-    padding-right: 0.75rem;
-  }
-
-  .app-container .stats-bar .stat-label {
-    font-size: 0.6875rem;
-  }
-
-  .app-container .stats-bar .stat-value {
-    font-size: 0.8125rem;
-  }
-
-  .app-container .sign-card {
-    width: calc(var(--sign-size) * 0.85);
-  }
+  elements.liveToggle.addEventListener("click", () => {
+    try {
+      const on = elements.liveToggle.getAttribute("aria-pressed") !== "true"
+      if (on) startCamera()
+      else stopCamera()
+    } catch (e) {
+      console.error("Error handling live-toggle click:", e)
+    }
+  })
 }
 
-/* Accessibility */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+function startCamera() {
+  const video = elements.cameraVideo
+  const canvas = elements.cameraCanvas
+  if (!video || !canvas) return
+
+  video.classList.remove("hidden")
+  canvas.classList.remove("hidden")
+  elements.avatar.classList.add("idle")
+  elements.liveStatus = document.getElementById("live-status")
+  elements.liveStatus.textContent = "Starting camera…"
+  elements.liveToggle.setAttribute("aria-pressed", "true")
+  elements.liveStatus.textContent = "Camera on"
+
+  const hands = new Hands({locateFile: (file) => {
+    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+  }})
+  hands.setOptions({
+    maxNumHands: 1,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.6,
+    minTrackingConfidence: 0.5
+  })
+  hands.onResults(onHandsResults)
+
+  cameraInstance = new Camera(video, {
+    onFrame: async () => {
+      await hands.send({image: video})
+    },
+    width: 640,
+    height: 480
+  })
+  cameraInstance.start()
+  setStatus("processing", "Live camera")
+}
+
+function stopCamera() {
+  if (cameraInstance) {
+    cameraInstance.stop()
+    cameraInstance = null
   }
+  elements.cameraVideo?.classList.add("hidden")
+  elements.cameraCanvas?.classList.add("hidden")
+  elements.liveToggle.setAttribute("aria-pressed", "false")
+  elements.liveStatus.textContent = "Camera off"
+  // Reset avatar to idle and clear any text
+  if (elements.avatar) {
+    elements.avatar.classList.remove('avatar-wave','avatar-bow')
+    elements.avatar.classList.add('idle')
+    elements.avatar.textContent = ''
+  }
+  setStatus("ready", "Ready")
 }
 
-/* Focus states */
-.app-container :focus-visible {
-  outline: 2px solid var(--accent-primary);
-  outline-offset: 2px;
+function onHandsResults(results) {
+  const canvas = elements.cameraCanvas
+  const ctx = canvas.getContext("2d")
+  ctx.save()
+  ctx.clearRect(0,0,canvas.width, canvas.height)
+  ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height)
+
+  if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+    const landmarks = results.multiHandLandmarks[0]
+    // draw landmarks
+    drawConnectors(ctx, landmarks, HAND_CONNECTIONS, {color: '#3b82f6', lineWidth: 2})
+    drawLandmarks(ctx, landmarks, {color: '#fff', lineWidth: 1})
+
+    const maybeGesture = detectGestureFromLandmarks(landmarks)
+    gestureHistory.push(maybeGesture)
+    if (gestureHistory.length > GESTURE_WINDOW) gestureHistory.shift()
+
+    const stable = getStableGesture()
+    if (stable) {
+      triggerAvatarAnimation(stable)
+    }
+  }
+  ctx.restore()
 }
 
-/* Screen reader only */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+function getStableGesture() {
+  const counts = {}
+  gestureHistory.forEach(g => { if (g) counts[g] = (counts[g] || 0) + 1 })
+  const entries = Object.entries(counts)
+  if (entries.length === 0) return null
+  entries.sort((a,b) => b[1] - a[1])
+  const [gesture, count] = entries[0]
+  if (count >= Math.ceil(GESTURE_WINDOW * 0.6)) return gesture
+  return null
+}
+
+function detectGestureFromLandmarks(landmarks) {
+  // simple heuristic: wave if strong lateral movement in recent frames
+  const xs = landmarks.map(l => l.x)
+  const ys = landmarks.map(l => l.y)
+  const xRange = Math.max(...xs) - Math.min(...xs)
+  const yRange = Math.max(...ys) - Math.min(...ys)
+
+  if (xRange > GESTURE_THRESHOLD_WAVE && yRange < 0.25) return "HELLO"
+  // thank you: approximate by hand positioned forward (z negative) and fairly high (near face)
+  const avgZ = landmarks.reduce((s,l)=>s+l.z,0)/landmarks.length
+  if (avgZ < -0.04 && ys.reduce((a,b)=>a+b,0)/ys.length < 0.45) return "THANK_YOU"
+
+  return null
+}
+
+function triggerAvatarAnimation(sign) {
+  if (!elements.avatar) return
+  const map = { HELLO: 'avatar-wave', THANK_YOU: 'avatar-bow' }
+  const cls = map[sign]
+
+  // Update live label and avatar text (friendly short label)
+  elements.liveSignLabel.textContent = sign || ''
+  elements.avatar.textContent = sign ? sign.replace('_', ' ') : ''
+
+  // Clear any previous animation classes, force reflow, then add the new animation class to reliably restart
+  elements.avatar.classList.remove('avatar-wave', 'avatar-bow', 'idle')
+  void elements.avatar.offsetWidth // force reflow
+
+  if (cls) {
+    elements.avatar.classList.add(cls)
+  } else {
+    elements.avatar.classList.add('idle')
+  }
+
+  // Increment match count when a sign is recognized
+  if (sign) {
+    elements.matchCount.textContent = Number(elements.matchCount.textContent || 0) + 1
+  }
+
+  // Use animationend to revert the avatar to idle so timing follows the actual animation
+  const onEnd = () => {
+    if (cls) elements.avatar.classList.remove(cls)
+    elements.avatar.classList.add('idle')
+    // clear avatar text shortly after animation completes
+    setTimeout(() => {
+      if (elements.avatar.classList.contains('idle')) elements.avatar.textContent = ''
+    }, 400)
+    elements.avatar.removeEventListener('animationend', onEnd)
+  }
+
+  elements.avatar.addEventListener('animationend', onEnd)
 }
