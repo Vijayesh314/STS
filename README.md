@@ -83,9 +83,3 @@ Future versions will:
 
 This project shows that live speech can be turned into useful visual signs in real time.  
 It is a foundation for building more advanced accessibility tools in the future.
-
----
-
-## Team
-
-Built as a hackathon prototype to explore real-time communication access.
